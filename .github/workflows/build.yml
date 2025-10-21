@@ -1,0 +1,24 @@
+name: Build iOS IPA
+
+on: [push]
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    - name: Install Cordova
+      run: npm install -g cordova
+    - name: Add iOS platform
+      run: cordova platform add ios
+    - name: Build iOS
+      run: cordova build ios
+    - name: Upload IPA
+      uses: actions/upload-artifact@v3
+      with:
+        name: iOS-IPA
+        path: platforms/ios/build/device/*.ipa
