@@ -1,12 +1,9 @@
-name: Build iOS IPA
+name: Build iOS App
 
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 
 jobs:
-  build-ios:
+  build:
     runs-on: macos-latest
     
     steps:
@@ -16,31 +13,33 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
-        cache: 'npm'
+        node-version: 18
         
-    - name: Install Cordova
-      run: npm install -g cordova
-      
-    - name: Check project structure
+    - name: Install Cordova and iOS dependencies
       run: |
-        ls -la
-        cat config.xml
-      
-    - name: Add iOS platform
-      run: cordova platform add ios
-      
-    - name: Install iOS dependencies
+        npm install -g cordova
+        sudo gem install cocoapods
+        
+    - name: Clean and recreate iOS platform
       run: |
-        cd platforms/ios
-        pod install
-      
+        # 删除可能损坏的 iOS 平台
+        rm -rf platforms/ios
+        rm -rf plugins/
+        
+        # 重新添加 iOS 平台
+        cordova platform add ios
+        
+        # 检查是否生成了 Podfile
+        echo "=== Checking iOS platform structure ==="
+        ls -la platforms/ios/
+        
     - name: Build iOS app
-      run: cordova build ios
-      
-    - name: Upload IPA artifact
+      run: |
+        cordova build ios
+        
+    - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: iOS-IPA
-        path: platforms/ios/build/device/*.ipa
-        retention-days: 30
+        name: iOS-Build
+        path: platforms/ios/build/**/*.ipa
+        retention-days: 7
