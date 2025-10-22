@@ -22,24 +22,26 @@ jobs:
         
     - name: Clean and recreate iOS platform
       run: |
-        # 删除可能损坏的 iOS 平台
         rm -rf platforms/ios
-        rm -rf plugins/
-        
-        # 重新添加 iOS 平台
         cordova platform add ios
-        
-        # 检查是否生成了 Podfile
-        echo "=== Checking iOS platform structure ==="
-        ls -la platforms/ios/
         
     - name: Build iOS app
       run: |
-        cordova build ios
+        cordova build ios --device
+        
+    - name: Find and list build outputs
+      run: |
+        echo "=== Searching for build outputs ==="
+        find platforms/ios -name "*.ipa" -o -name "*.app" | head -10
+        echo "=== Build directory structure ==="
+        find platforms/ios/build -type f -name "*" | head -20
         
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: iOS-Build
-        path: platforms/ios/build/**/*.ipa
+        path: |
+          platforms/ios/build/**/*.ipa
+          platforms/ios/build/**/*.app
+        if-no-files-found: warn
         retention-days: 7
