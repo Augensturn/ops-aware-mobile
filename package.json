@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
   "name": "OpsAwareMobile",
   "version": "0.0.1",
   "private": true,
@@ -11,7 +10,6 @@
     "test": "jest"
   },
   "dependencies": {
-    "@react-native/new-app-screen": "0.82.1",
     "react": "19.1.1",
     "react-native": "0.82.1",
     "react-native-safe-area-context": "^5.5.2",
@@ -39,28 +37,5 @@
   },
   "engines": {
     "node": ">=20"
-=======
-  "name": "com.wanfu",
-  "displayName": "运维态势感知平台",
-  "version": "1.0.0",
-  "description": "A sample Apache Cordova application that responds to the deviceready event.",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [
-    "ecosystem:cordova"
-  ],
-  "author": "Apache Cordova Team",
-  "license": "Apache-2.0",
-  "devDependencies": {
-    "cordova-android": "^14.0.1",
-    "cordova-ios": "^7.1.1"
-  },
-  "cordova": {
-    "platforms": [
-      "android"
-    ]
->>>>>>> 37626bd6eaf6e145feeaff83a3dab29c3541fd70
   }
 }
