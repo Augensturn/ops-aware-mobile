@@ -15,33 +15,35 @@ jobs:
       with:
         node-version: 18
         
-    - name: Install Cordova and iOS dependencies
-      run: |
-        npm install -g cordova
-        sudo gem install cocoapods
+    - name: Install Cordova
+      run: npm install -g cordova
         
-    - name: Clean and recreate iOS platform
+    - name: Update iOS deployment target
       run: |
+        # 更新 config.xml 中的部署目标
+        sed -i.bak 's/<platform name="ios">/<platform name="ios">\
+        <preference name="deployment-target" value="12.0" \/>/' config.xml
+        
+        # 重新添加 iOS 平台以应用更改
         rm -rf platforms/ios
         cordova platform add ios
         
-    - name: Build iOS app
+    - name: Build for simulator (no signing required)
       run: |
-        cordova build ios --device
+        cordova build ios --emulator
         
     - name: Find and list build outputs
       run: |
         echo "=== Searching for build outputs ==="
-        find platforms/ios -name "*.ipa" -o -name "*.app" | head -10
-        echo "=== Build directory structure ==="
-        find platforms/ios/build -type f -name "*" | head -20
+        find platforms/ios -name "*.app" -o -name "*.ipa" | head -20
+        echo "=== Build directory contents ==="
+        ls -la platforms/ios/build/ || echo "No build directory"
         
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: iOS-Build
+        name: iOS-Simulator-Build
         path: |
-          platforms/ios/build/**/*.ipa
           platforms/ios/build/**/*.app
         if-no-files-found: warn
         retention-days: 7
