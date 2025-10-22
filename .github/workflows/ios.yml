@@ -1,4 +1,4 @@
-name: Build React Native iOS App
+name: Build iOS App
 
 on:
   push:
@@ -6,8 +6,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-ios:
+  build:
     runs-on: macos-latest
+    timeout-minutes: 30
     
     steps:
     - name: Checkout code
@@ -18,6 +19,15 @@ jobs:
       with:
         node-version: '18'
         cache: 'npm'
+        
+    - name: Verify project structure
+      run: |
+        echo "=== Project Structure ==="
+        ls -la
+        echo "=== iOS Directory ==="
+        ls -la ios/ || echo "iOS directory not found"
+        echo "=== Package.json ==="
+        cat package.json
         
     - name: Install dependencies
       run: npm install
@@ -32,25 +42,27 @@ jobs:
       run: |
         npx react-native run-ios --configuration Release --device
       
-    - name: Create IPA from build
+    - name: Create IPA
       run: |
         APP_PATH=$(find ios/build -name "*.app" -type d | head -1)
         if [ -n "$APP_PATH" ]; then
-          echo "Found app: $APP_PATH"
+          echo "Creating IPA from: $APP_PATH"
           mkdir Payload
           cp -r "$APP_PATH" Payload/
           zip -q -r ops-aware-mobile.ipa Payload
           rm -rf Payload
           echo "IPA created successfully"
+          ls -lh *.ipa
         else
-          echo "Error: No .app file found"
-          find ios/build -type f -name "*" | head -20
+          echo "Error: No .app file found in build directory"
+          echo "Build directory contents:"
+          find ios/build -type f -name "*" 2>/dev/null | head -20 || echo "Build directory not found"
           exit 1
         fi
       
-    - name: Upload IPA artifact
+    - name: Upload IPA
       uses: actions/upload-artifact@v4
       with:
-        name: React-Native-iOS-IPA
+        name: iOS-App-IPA
         path: ops-aware-mobile.ipa
         retention-days: 30
