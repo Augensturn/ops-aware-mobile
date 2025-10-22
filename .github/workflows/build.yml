@@ -1,4 +1,4 @@
-name: Build Stable iOS IPA
+name: Build iOS Simulator App
 
 on: [push, workflow_dispatch]
 
@@ -15,40 +15,42 @@ jobs:
       with:
         node-version: '18'
         
-    - name: Clean and setup Cordova
+    - name: Install Cordova and setup
       run: |
         npm install -g cordova
         rm -rf platforms/ios
         rm -rf plugins/
         
-    - name: Configure project
+    - name: Configure project for simulator
       run: |
-        sed -i.bak 's/<name>运维态势感知平台<\/name>/<name>OpsAwarePlatform<\/name>/' config.xml
+        sed -i.bak 's/<name>运维态势感知平台<\/name>/<name>OpsAware<\/name>/' config.xml
         sed -i.bak 's/<platform name="ios">/<platform name="ios">\
         <preference name="deployment-target" value="12.0" \/>/' config.xml
         
-    - name: Add iOS platform and build
+    - name: Add iOS platform
       run: |
         cordova platform add ios
-        cordova build ios --device
         
-    - name: Create clean IPA
+    - name: Build for simulator
       run: |
-        APP_DIR=$(find platforms/ios/build -name "*.app" -type d | head -1)
-        if [ -n "$APP_DIR" ]; then
-          echo "Packaging $APP_DIR"
-          mkdir -p Payload
-          cp -r "$APP_DIR" Payload/
-          zip -q -r -y ops-aware.ipa Payload
-          rm -rf Payload
-          echo "IPA created"
+        cordova build ios --emulator
+        
+    - name: Find and package simulator app
+      run: |
+        SIMULATOR_APP=$(find platforms/ios/build -name "*.app" -type d | grep -i simulator | head -1)
+        if [ -n "$SIMULATOR_APP" ]; then
+          echo "Found simulator app: $SIMULATOR_APP"
+          zip -q -r simulator-app.zip "$SIMULATOR_APP"
+          echo "Simulator app packaged"
         else
-          echo "Error: No app found"
+          echo "Listing build directory:"
+          find platforms/ios/build -type f -name "*" | head -20
+          echo "No simulator app found"
           exit 1
         fi
         
-    - name: Upload IPA
+    - name: Upload simulator app
       uses: actions/upload-artifact@v4
       with:
-        name: Stable-iOS-IPA
-        path: ops-aware.ipa
+        name: iOS-Simulator-App
+        path: simulator-app.zip
