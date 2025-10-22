@@ -1,0 +1,46 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install Cordova
+      run: npm install -g cordova
+      
+    - name: Check project structure
+      run: |
+        ls -la
+        cat config.xml
+      
+    - name: Add iOS platform
+      run: cordova platform add ios
+      
+    - name: Install iOS dependencies
+      run: |
+        cd platforms/ios
+        pod install
+      
+    - name: Build iOS app
+      run: cordova build ios
+      
+    - name: Upload IPA artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: iOS-IPA
+        path: platforms/ios/build/device/*.ipa
+        retention-days: 30
