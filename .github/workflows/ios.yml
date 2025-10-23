@@ -1,4 +1,4 @@
-name: Build iOS App
+name: Build iOS App (Stable)
 
 on:
   push:
@@ -11,23 +11,23 @@ jobs:
     timeout-minutes: 40
 
     steps:
-      # 🧩 1. 拉取项目代码
-      - name: Checkout code
+      # 1️⃣ 拉取项目代码
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      # ⚙️ 2. 设置 Node.js 环境
+      # 2️⃣ 设置 Node.js 环境
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
 
-      # 📦 3. 安装 npm 依赖
-      - name: Install JS dependencies
+      # 3️⃣ 安装 JS 依赖
+      - name: Install dependencies
         run: npm install
 
-      # 🍎 4. 安装 CocoaPods 依赖
-      - name: Install iOS dependencies
+      # 4️⃣ 安装 iOS CocoaPods 依赖
+      - name: Install CocoaPods
         run: |
           cd ios
           echo "🧹 清理旧缓存..."
@@ -36,58 +36,57 @@ jobs:
           pod install
           cd ..
 
-      # 📱 5. 列出可用模拟器（方便调试）
-      - name: List available simulators
-        run: xcrun simctl list devices available
-
-      # 🏗️ 6. 构建 iOS 模拟器版本（Release 模式）
-      - name: Build iOS app for simulator
+      # 5️⃣ 构建 iOS 模拟器版本
+      - name: Build iOS App
         run: |
           cd ios
-          echo "🚧 开始构建 iOS 模拟器版本..."
+          echo "🚧 正在构建 iOS 模拟器版 (iPhone 16 Pro Max, iOS 18.5)..."
           xcodebuild -workspace OpsAwareMobile.xcworkspace \
             -scheme OpsAwareMobile \
             -configuration Release \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
-            -jobs 1 \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.5' \
+            -arch arm64 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
             BUILD_DIR=build \
-            CODE_SIGNING_ALLOWED=NO
+            ONLY_ACTIVE_ARCH=YES \
+            -quiet
           cd ..
 
-      # 🧹 7. 打包成干净的 .ipa（自动清除中文和非法字符）
-      - name: Package clean IPA for signing
+      # 6️⃣ 查找 .app 并清理非法文件名再打包成 .ipa
+      - name: Package Clean IPA
         run: |
-          SIMULATOR_APP=$(find ios/build -name "*.app" -type d | head -1)
-          if [ -n "$SIMULATOR_APP" ]; then
-            echo "✅ 找到 .app 文件: $SIMULATOR_APP"
-            mkdir Payload
-            cp -r "$SIMULATOR_APP" Payload/
-
-            echo "🧹 正在清理非法文件名（中文、空格、特殊字符）..."
-            find Payload -depth | while read f; do
-              clean=$(echo "$f" | iconv -f utf8 -t ascii//TRANSLIT 2>/dev/null | sed 's/[^A-Za-z0-9._\/-]/_/g')
-              if [ "$f" != "$clean" ]; then
-                mv "$f" "$clean" 2>/dev/null || true
-              fi
-            done
-
-            echo "📦 正在打包 IPA..."
-            zip -q -r ops-aware-mobile.ipa Payload
-            rm -rf Payload
-
-            echo "✅ IPA 打包完成"
-            ls -lh *.ipa
-          else
+          SIM_APP=$(find ios/build -name "*.app" -type d | head -1)
+          if [ -z "$SIM_APP" ]; then
             echo "❌ 未找到 .app 文件"
-            find ios/build -type f -name "*" | head -20
+            find ios/build -type f | head -20
             exit 1
           fi
 
-      # 📤 8. 上传 .ipa 产物
-      - name: Upload IPA artifact
+          echo "✅ 找到 .app 文件: $SIM_APP"
+          mkdir Payload
+          cp -r "$SIM_APP" Payload/
+
+          echo "🧹 清理非法文件名（中文、空格、特殊字符）..."
+          find Payload -depth | while read f; do
+            clean=$(echo "$f" | iconv -f utf8 -t ascii//TRANSLIT 2>/dev/null | sed 's/[^A-Za-z0-9._\/-]/_/g')
+            if [ "$f" != "$clean" ]; then
+              mv "$f" "$clean" 2>/dev/null || true
+            fi
+          done
+
+          echo "📦 打包 IPA..."
+          zip -q -r ops-aware-mobile.ipa Payload
+          rm -rf Payload
+
+          echo "✅ IPA 生成成功"
+          ls -lh *.ipa
+
+      # 7️⃣ 上传 IPA 产物
+      - name: Upload iOS Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iOS-Simulator-IPA
+          name: iOS-IPA
           path: ops-aware-mobile.ipa
           retention-days: 30
