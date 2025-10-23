@@ -45,7 +45,7 @@ jobs:
           -scheme OpsAwareMobile \
           -configuration Release \
           -sdk iphonesimulator \
-          -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
+          -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5'
           -jobs 1 \
           BUILD_DIR=build
         cd ..
