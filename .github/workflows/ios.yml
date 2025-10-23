@@ -11,68 +11,82 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      # 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      # 设置 Node 环境
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
 
-    - name: Install dependencies
-      run: npm install
+      # 安装 npm 依赖
+      - name: Install dependencies
+        run: npm install
 
-    # 安装 iOS 依赖
-    - name: Install iOS dependencies
-      run: |
-        cd ios
-        # 清理旧文件防止冲突
-        rm -rf Pods Podfile.lock ~/Library/Developer/Xcode/DerivedData
-        pod repo update
-        pod install
-        cd ..
+      # 安装 CocoaPods（iOS 依赖）
+      - name: Install iOS dependencies
+        run: |
+          cd ios
+          echo "🧹 Cleaning old Pods and DerivedData..."
+          rm -rf Pods Podfile.lock ~/Library/Developer/Xcode/DerivedData
+          pod deintegrate
+          pod repo update
+          echo "📦 Installing new Pods..."
+          pod install --verbose --repo-update
+          cd ..
 
-    # 列出可用模拟器
-    - name: List available simulators
-      run: xcrun simctl list devices available
+      # 动态检测可用的 iOS 模拟器设备
+      - name: Detect available simulator
+        id: detect-sim
+        run: |
+          DEVICE=$(xcrun simctl list devices available | grep "iPhone 16 (" | head -n 1 | awk -F '[()]' '{print $2}')
+          if [ -z "$DEVICE" ]; then
+            echo "❌ No iPhone 16 simulator found. Available simulators:"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "✅ Using simulator ID: $DEVICE"
+          echo "device_id=$DEVICE" >> $GITHUB_OUTPUT
 
-    # 构建 iOS 模拟器版本
-    - name: Build iOS app for simulator
-      run: |
-        cd ios
-        xcodebuild -workspace OpsAwareMobile.xcworkspace \
-          -scheme OpsAwareMobile \
-          -configuration Release \
-          -sdk iphonesimulator \
-          -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5'
-          -jobs 1 \
-          BUILD_DIR=build
-        cd ..
+      # 构建 iOS 模拟器版本（Debug 模式）
+      - name: Build iOS app for simulator
+        run: |
+          cd ios
+          echo "🏗️ Building iOS Debug app for simulator..."
+          xcodebuild -workspace OpsAwareMobile.xcworkspace \
+            -scheme OpsAwareMobile \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=${{ steps.detect-sim.outputs.device_id }}" \
+            -jobs 1 \
+            BUILD_DIR=build
+          cd ..
 
-    # 查找 .app 并打包成 .ipa
-    - name: Find simulator app and create IPA
-      run: |
-        SIMULATOR_APP=$(find ios/build -name "*.app" -type d | head -1)
+      # 查找 .app 并打包成 .ipa
+      - name: Find simulator app and create IPA
+        run: |
+          SIMULATOR_APP=$(find ios/build -name "*.app" -type d | head -1)
+          if [ -n "$SIMULATOR_APP" ]; then
+            echo "✅ Found simulator app: $SIMULATOR_APP"
+            mkdir Payload
+            cp -r "$SIMULATOR_APP" Payload/
+            zip -q -r ops-aware-mobile.ipa Payload
+            rm -rf Payload
+            echo "✅ IPA created successfully"
+            ls -lh *.ipa
+          else
+            echo "❌ Error: No .app file found"
+            find ios/build -type f -name "*" | head -20
+            exit 1
+          fi
 
-        if [ -n "$SIMULATOR_APP" ]; then
-          echo "Found simulator app: $SIMULATOR_APP"
-          mkdir Payload
-          cp -r "$SIMULATOR_APP" Payload/
-          zip -q -r ops-aware-mobile.ipa Payload
-          rm -rf Payload
-          echo "✅ IPA created successfully"
-          ls -lh *.ipa
-        else
-          echo "❌ Error: No .app file found"
-          find ios/build -type f -name "*" | head -20
-          exit 1
-        fi
-
-    # 上传 ipa 产物
-    - name: Upload IPA
-      uses: actions/upload-artifact@v4
-      with:
-        name: iOS-Simulator-IPA
-        path: ops-aware-mobile.ipa
-        retention-days: 30
+      # 上传 ipa 产物
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: iOS-Simulator-IPA
+          path: ops-aware-mobile.ipa
+          retention-days: 30

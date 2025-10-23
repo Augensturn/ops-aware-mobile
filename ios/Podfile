@@ -22,6 +22,7 @@ target 'OpsAwareMobile' do
     # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
+pod 'DoubleConversion', :podspec => '../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec'
 
   post_install do |installer|
     # 原本 React Native 的安装步骤
