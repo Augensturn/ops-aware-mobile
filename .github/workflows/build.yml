@@ -1,0 +1,87 @@
+name: Build iOS IPA (No Errors + Stable Packaging)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Configure npm
+        run: npm config set registry https://registry.npmmirror.com
+
+      - name: Install dependencies
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --legacy-peer-deps --force
+
+      - name: Install CocoaPods dependencies
+        run: |
+          sudo gem install cocoapods -N
+          cd ios
+          rm -rf Pods Podfile.lock ~/Library/Developer/Xcode/DerivedData
+          pod deintegrate
+          pod repo update
+          pod install --repo-update
+          cd ..
+
+      - name: Clean DerivedData
+        run: |
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+          cd ios
+          xcodebuild clean -workspace OpsAwareMobile.xcworkspace -scheme OpsAwareMobile -configuration Release
+          cd ..
+
+      - name: Build iOS App
+        run: |
+          cd ios
+          echo "🚧 Building iOS Release for simulator..."
+          xcodebuild \
+            -workspace OpsAwareMobile.xcworkspace \
+            -scheme OpsAwareMobile \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.5" \
+            -derivedDataPath build \
+            BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
+            EXCLUDED_ARCHS=arm64 \
+            BUILD_DIR=build
+          cd ..
+
+      - name: Package IPA
+        run: |
+          echo "📦 Searching for .app..."
+          APP_PATH=$(find ios/build -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ No .app found!"
+            find ios/build -type d | head -20
+            exit 1
+          fi
+          echo "✅ Found app: $APP_PATH"
+          mkdir Payload
+          cp -r "$APP_PATH" Payload/
+          IPA_NAME="OpsAwareMobile_$(date +%Y%m%d_%H%M%S).ipa"
+          zip -r "$IPA_NAME" Payload >/dev/null
+          rm -rf Payload
+          echo "✅ IPA packaged successfully: $IPA_NAME"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpsAwareMobile-Release-IPA
+          path: "*.ipa"
+          retention-days: 30
