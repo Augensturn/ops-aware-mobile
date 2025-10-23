@@ -1,4 +1,4 @@
-name: Build iOS App (Stable)
+name: Build iOS App (Stable, no arch conflict)
 
 on:
   push:
@@ -36,7 +36,7 @@ jobs:
           pod install
           cd ..
 
-      # 5️⃣ 构建 iOS 模拟器版本
+      # 5️⃣ 构建 iOS 模拟器版本（⚙️ 修复 arch 冲突）
       - name: Build iOS App
         run: |
           cd ios
@@ -46,7 +46,6 @@ jobs:
             -configuration Release \
             -sdk iphonesimulator \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.5' \
-            -arch arm64 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             BUILD_DIR=build \
