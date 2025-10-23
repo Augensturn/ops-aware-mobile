@@ -24,11 +24,19 @@ target 'OpsAwareMobile' do
   )
 
   post_install do |installer|
+    # 原本 React Native 的安装步骤
     react_native_post_install(
       installer,
       config[:reactNativePath],
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # ✅ 解决 Xcode 16 在模拟器上 arm64 架构冲突的问题
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings["EXCLUDED_ARCHS[sdk=iphonesimulator*]"] = "arm64"
+      end
+    end
   end
 end

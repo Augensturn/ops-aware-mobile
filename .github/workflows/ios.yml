@@ -9,55 +9,67 @@ jobs:
   build-ios:
     runs-on: macos-latest
     timeout-minutes: 30
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
         cache: 'npm'
-        
+
     - name: Install dependencies
       run: npm install
-      
+
+    # 安装 iOS 依赖
     - name: Install iOS dependencies
       run: |
         cd ios
-        pod install --repo-update
+        # 清理旧文件防止冲突
+        rm -rf Pods Podfile.lock ~/Library/Developer/Xcode/DerivedData
+        pod repo update
+        pod install
         cd ..
-      
+
+    # 列出可用模拟器
     - name: List available simulators
-      run: |
-        xcrun simctl list devices available
-      
+      run: xcrun simctl list devices available
+
+    # 构建 iOS 模拟器版本
     - name: Build iOS app for simulator
       run: |
         cd ios
-        xcodebuild -workspace OpsAwareMobile.xcworkspace -scheme OpsAwareMobile -configuration Release -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone SE (3rd generation),OS=18.6' BUILD_DIR=build
+        xcodebuild -workspace OpsAwareMobile.xcworkspace \
+          -scheme OpsAwareMobile \
+          -configuration Release \
+          -sdk iphonesimulator \
+          -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
+          -jobs 1 \
+          BUILD_DIR=build
         cd ..
-      
+
+    # 查找 .app 并打包成 .ipa
     - name: Find simulator app and create IPA
       run: |
         SIMULATOR_APP=$(find ios/build -name "*.app" -type d | head -1)
-        
+
         if [ -n "$SIMULATOR_APP" ]; then
           echo "Found simulator app: $SIMULATOR_APP"
           mkdir Payload
           cp -r "$SIMULATOR_APP" Payload/
           zip -q -r ops-aware-mobile.ipa Payload
           rm -rf Payload
-          echo "IPA created from simulator build"
+          echo "✅ IPA created successfully"
           ls -lh *.ipa
         else
-          echo "Error: No .app file found"
-          echo "Build directory contents:"
-          find ios/build -type f -name "*" 2>/dev/null | head -20
+          echo "❌ Error: No .app file found"
+          find ios/build -type f -name "*" | head -20
           exit 1
         fi
-      
+
+    # 上传 ipa 产物
     - name: Upload IPA
       uses: actions/upload-artifact@v4
       with:
