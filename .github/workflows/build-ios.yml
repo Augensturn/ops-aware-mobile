@@ -1,94 +1,86 @@
-name: Build iOS IPA (Signed + Stable)
+name: Build iOS (React Native + Hermes Fixed)
 
 on:
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
   push:
     branches:
-      - main  # 如果你的主分支叫 master，请改成 master
+      - main
 
 jobs:
-  build-ios:
-    runs-on: macos-latest
-    timeout-minutes: 40
+  ios-build:
+    runs-on: macos-14
+    timeout-minutes: 45
 
     steps:
-      # 1️⃣ 拉取项目源码
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 2️⃣ 安装 Node.js
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: 18
+          cache: npm
 
-      # 3️⃣ 设置 npm 国内源（防止依赖下载失败）
-      - name: Set NPM registry
-        run: npm config set registry https://registry.npmmirror.com
-
-      # 4️⃣ 安装依赖（兼容 npm ci / install）
-      - name: Install dependencies
+      - name: Install JS dependencies
         run: |
-          rm -rf node_modules
-          if [ -f package-lock.json ]; then
-            npm ci || npm install --force
-          else
-            npm install --force
-          fi
+          npm config set registry https://registry.npmmirror.com
+          npm ci || npm install --legacy-peer-deps
 
-      # 5️⃣ 安装 iOS 依赖
-      - name: Install CocoaPods dependencies
+      - name: Setup CocoaPods
         run: |
+          sudo gem install cocoapods -N
           cd ios
           rm -rf Pods Podfile.lock ~/Library/Developer/Xcode/DerivedData
+          pod deintegrate
           pod repo update
-          pod install
+          pod install --repo-update
           cd ..
 
-      # 6️⃣ 列出模拟器
-      - name: List available simulators
-        run: xcrun simctl list devices available
-
-      # 7️⃣ 构建 iOS 模拟器版 APP（Xcode）
-      - name: Build iOS App for simulator
+      - name: Build all Pods to warm cache
         run: |
           cd ios
-          echo "🚧 正在构建 iOS 模拟器版 (iPhone 16 Pro Max, iOS 18.5)..."
+          echo "🚧 Prebuilding Pods..."
+          xcodebuild -workspace OpsAwareMobile.xcworkspace \
+            -scheme Pods-OpsAwareMobile \
+            -sdk iphonesimulator \
+            -configuration Release \
+            BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
+            EXCLUDED_ARCHS=arm64 \
+            build
+          cd ..
+
+      - name: Build iOS App
+        run: |
+          cd ios
+          echo "🚧 Building main app..."
           xcodebuild \
             -workspace OpsAwareMobile.xcworkspace \
             -scheme OpsAwareMobile \
-            -configuration Release \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.5' \
+            -configuration Release \
+            -destination "platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.5" \
             -derivedDataPath build \
-            BUILD_DIR=build
+            BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
+            EXCLUDED_ARCHS=arm64 \
+            OTHER_LDFLAGS="-ObjC"
           cd ..
 
-      # 8️⃣ 查找 .app 文件并打包成 IPA
-      - name: Package .app into IPA
+      - name: Package IPA
         run: |
-          echo "📦 正在查找 .app 文件..."
           APP_PATH=$(find ios/build -name "*.app" -type d | head -1)
-          if [ -n "$APP_PATH" ]; then
-            echo "✅ 找到应用: $APP_PATH"
-            mkdir Payload
-            cp -r "$APP_PATH" Payload/
-            # 移除潜在非法字符（如中文或空格）
-            IPA_NAME="OpsAwareMobile_$(date +%Y%m%d_%H%M%S).ipa"
-            zip -r "$IPA_NAME" Payload >/dev/null
-            rm -rf Payload
-            echo "✅ IPA 打包完成: $IPA_NAME"
-          else
-            echo "❌ 未找到 .app 文件"
-            find ios/build -type d | head -20
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ No .app found!"
             exit 1
           fi
+          mkdir Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r OpsAwareMobile.ipa Payload >/dev/null
+          rm -rf Payload
+          echo "✅ IPA packaged successfully"
 
-      # 9️⃣ 上传 IPA 文件为 Artifact（可下载）
-      - name: Upload IPA Artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: OpsAwareMobile-Signed-IPA
+          name: OpsAwareMobile-IPA
           path: "*.ipa"
-          retention-days: 30
+          retention-days: 14
