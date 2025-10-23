@@ -8,79 +8,83 @@ on:
 jobs:
   build-ios:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
+      # 🧩 1. 拉取项目代码
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ⚙️ 2. 设置 Node.js 环境
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
 
-      - name: Install dependencies
+      # 📦 3. 安装 npm 依赖
+      - name: Install JS dependencies
         run: npm install
 
-      # 安装 CocoaPods
-      - name: Install CocoaPods dependencies
+      # 🍎 4. 安装 CocoaPods 依赖
+      - name: Install iOS dependencies
         run: |
           cd ios
-          echo "🧹 Cleaning old Pods and DerivedData..."
+          echo "🧹 清理旧缓存..."
           rm -rf Pods Podfile.lock ~/Library/Developer/Xcode/DerivedData
-          pod deintegrate
           pod repo update
-          echo "📦 Installing Pods..."
-          pod install --repo-update --verbose
+          pod install
           cd ..
 
-      # 动态检测当前可用模拟器（适配不同 Xcode 版本）
-      - name: Detect available simulator
-        id: detect-sim
-        run: |
-          DEVICE=$(xcrun simctl list devices available | grep "iPhone 16 (" | head -n 1 | awk -F '[()]' '{print $2}')
-          if [ -z "$DEVICE" ]; then
-            echo "❌ 没找到可用的 iPhone 16 模拟器，输出所有可用设备："
-            xcrun simctl list devices available
-            exit 1
-          fi
-          echo "✅ 使用模拟器 ID: $DEVICE"
-          echo "device_id=$DEVICE" >> $GITHUB_OUTPUT
+      # 📱 5. 列出可用模拟器（方便调试）
+      - name: List available simulators
+        run: xcrun simctl list devices available
 
-      # 构建 iOS 模拟器包
+      # 🏗️ 6. 构建 iOS 模拟器版本（Release 模式）
       - name: Build iOS app for simulator
         run: |
           cd ios
-          echo "🏗️ 正在构建 iOS Debug 模拟器版本..."
+          echo "🚧 开始构建 iOS 模拟器版本..."
           xcodebuild -workspace OpsAwareMobile.xcworkspace \
             -scheme OpsAwareMobile \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,id=${{ steps.detect-sim.outputs.device_id }}" \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
             -jobs 1 \
-            BUILD_DIR=build | xcpretty
+            BUILD_DIR=build \
+            CODE_SIGNING_ALLOWED=NO
           cd ..
 
-      # 打包成 IPA
-      - name: Package simulator IPA
+      # 🧹 7. 打包成干净的 .ipa（自动清除中文和非法字符）
+      - name: Package clean IPA for signing
         run: |
           SIMULATOR_APP=$(find ios/build -name "*.app" -type d | head -1)
           if [ -n "$SIMULATOR_APP" ]; then
             echo "✅ 找到 .app 文件: $SIMULATOR_APP"
             mkdir Payload
             cp -r "$SIMULATOR_APP" Payload/
+
+            echo "🧹 正在清理非法文件名（中文、空格、特殊字符）..."
+            find Payload -depth | while read f; do
+              clean=$(echo "$f" | iconv -f utf8 -t ascii//TRANSLIT 2>/dev/null | sed 's/[^A-Za-z0-9._\/-]/_/g')
+              if [ "$f" != "$clean" ]; then
+                mv "$f" "$clean" 2>/dev/null || true
+              fi
+            done
+
+            echo "📦 正在打包 IPA..."
             zip -q -r ops-aware-mobile.ipa Payload
             rm -rf Payload
-            echo "✅ IPA 打包成功"
+
+            echo "✅ IPA 打包完成"
             ls -lh *.ipa
           else
-            echo "❌ 未找到 .app 文件，打印前 20 个构建文件："
+            echo "❌ 未找到 .app 文件"
             find ios/build -type f -name "*" | head -20
             exit 1
           fi
 
-      # 上传构建产物
+      # 📤 8. 上传 .ipa 产物
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
